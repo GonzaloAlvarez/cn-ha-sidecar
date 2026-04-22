@@ -1,0 +1,130 @@
+services:
+  ts-ha:
+    image: tailscale/tailscale:latest
+    hostname: ts-ha
+    cap_add: [ "NET_ADMIN", "SYS_MODULE" ]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ts_state:/var/lib/tailscale
+      - ./certs:/staging-certs:ro
+    environment:
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_AUTHKEY=${HA_AUTHKEY}
+      - TS_HOSTNAME=ha
+      - TS_ACCEPT_DNS=true
+      - TS_AUTH_ONCE=true
+      - TS_EXTRA_ARGS=--login-server=https://${HEADSCALE_DOMAIN}
+      - SSL_CERT_DIR=${SSL_CERT_DIR}
+      - TS_USERSPACE=false
+      - TS_TAILSCALED_EXTRA_ARGS=--tun=tailscale0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  traefik-tailnet:
+    image: traefik:v3.6.9
+    network_mode: "service:ts-ha"
+    command:
+      - "--entrypoints.web.address=:8080"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--log.level=INFO"
+    volumes:
+      - ./traefik-tailnet/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - ts-ha
+    restart: unless-stopped
+
+  consul-register:
+    image: curlimages/curl:8.8.0
+    network_mode: "service:ts-ha"
+    environment:
+      - CONSUL_ADDR=http://${INFRA_VPS_TAILNET_IP}:8500
+      - SERVICE_NAME=homeassistant
+      - SERVICE_ID=homeassistant-ha
+      - SERVICE_HOST=ha.${TAILNET_DOMAIN}
+      - SERVICE_PORT=8080
+      - ROUTE_HOST=ha.${LAB_DOMAIN}
+    command: >
+      sh -c '
+        RULE=$(echo "Host(__H__)" | sed "s/__H__/\`$$ROUTE_HOST\`/");
+        PAYLOAD="{
+          \"Name\": \"$$SERVICE_NAME\",
+          \"ID\": \"$$SERVICE_ID\",
+          \"Address\": \"$$SERVICE_HOST\",
+          \"Port\": $$SERVICE_PORT,
+          \"Tags\": [
+            \"traefik.enable=true\",
+            \"traefik.http.routers.$$SERVICE_NAME.rule=$$RULE\",
+            \"traefik.http.routers.$$SERVICE_NAME.entrypoints=websecure\",
+            \"traefik.http.routers.$$SERVICE_NAME.tls=true\",
+            \"traefik.http.routers.$$SERVICE_NAME.tls.certresolver=dns\"
+          ],
+          \"Check\": {
+            \"TCP\": \"$$SERVICE_HOST:$$SERVICE_PORT\",
+            \"Interval\": \"10s\",
+            \"DeregisterCriticalServiceAfter\": \"2m\"
+          }
+        }";
+        while true; do
+          if curl -sf -X PUT "$$CONSUL_ADDR/v1/agent/service/register" \
+               -H "Content-Type: application/json" \
+               -d "$$PAYLOAD"; then
+            echo "Registered $$SERVICE_ID";
+          else
+            echo "Failed to register $$SERVICE_ID, retrying in 60s...";
+          fi;
+          sleep 60;
+        done
+      '
+    depends_on:
+      - ts-ha
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.4.2
+    network_mode: "service:ts-ha"
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - ./tailnet/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - ts-ha
+    restart: unless-stopped
+
+  traefik-lan:
+    image: traefik:v3.6.9
+    network_mode: host
+    command:
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--log.level=INFO"
+    volumes:
+      - ./traefik-lan/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./certs:/certs:ro
+    restart: unless-stopped
+
+  certwarden-client:
+    image: gregtwallace/certwarden-client:latest
+    volumes:
+      - ./certwarden-client.yaml:/opt/certwarden-client/config/certwarden-client.yaml:ro
+      - ./certs:/certs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    command:
+      - "--monitor-only"
+      - "--schedule=0 0 3 * * *"
+      - "--notification-url=smtp://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?from=${SMTP_FROM}&to=${ALERT_EMAIL}&starttls=yes"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_API_VERSION=1.45
+    restart: unless-stopped
+
+volumes:
+  ts_state:

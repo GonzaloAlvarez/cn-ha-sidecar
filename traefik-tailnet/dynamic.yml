@@ -1,0 +1,12 @@
+http:
+  routers:
+    ha-tailnet:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - web
+      service: ha
+  services:
+    ha:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8123"

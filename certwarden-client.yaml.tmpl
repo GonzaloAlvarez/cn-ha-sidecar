@@ -1,0 +1,9 @@
+orders:
+  - name: homeassistant_lan
+    cert_api_address: http://127.0.0.1:8055
+    cert_api_key: ${CERTWARDEN_API_KEY}
+    cert_name: homeassistant.lan
+    cert_file_path: /certs/lan.crt
+    key_file_path: /certs/lan.key
+    post_processing:
+      - shell_command: docker restart cn-ha-sidecar-traefik-lan-1

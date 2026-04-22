@@ -1,0 +1,17 @@
+http:
+  routers:
+    ha-lan:
+      rule: "Host(`${LAN_DOMAIN}`)"
+      entryPoints:
+        - websecure
+      service: ha
+      tls: {}
+  services:
+    ha:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8123"
+tls:
+  certificates:
+    - certFile: /certs/lan.crt
+      keyFile: /certs/lan.key
