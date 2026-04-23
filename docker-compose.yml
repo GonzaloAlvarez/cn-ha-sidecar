@@ -31,8 +31,6 @@ services:
       - "--log.level=INFO"
     volumes:
       - ./traefik-tailnet/dynamic.yml:/etc/traefik/dynamic.yml:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       - ts-ha
     restart: unless-stopped
