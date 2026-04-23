@@ -59,17 +59,16 @@ else
   echo "  docker compose down && docker compose up -d"
 fi
 
-if [ ! -f certs/lan.crt ]; then
-  echo "NOTE: certs/lan.crt not found."
-  echo "Certificates are managed by Cert Warden (cn-pki)."
-  echo "Once cn-pki is running and a cert is issued, certwarden-client will write certs/lan.crt automatically."
+echo "Fetching root CA from cn-pki..."
+if curl -sf -o certs/root_ca.crt "http://${PKI_IP}/cert/ca.crt"; then
+  echo "Root CA saved to certs/root_ca.crt"
+else
+  echo "WARNING: Could not fetch root CA from http://${PKI_IP}/cert/ca.crt"
+  echo "Traefik LAN will not be able to request certs from step-ca until certs/root_ca.crt is present."
 fi
 
 envsubst '${LAN_DOMAIN}' \
   < traefik-lan/dynamic.yml.tmpl > traefik-lan/dynamic.yml
-
-envsubst '${CERTWARDEN_API_KEY}' \
-  < certwarden-client.yaml.tmpl > certwarden-client.yaml
 
 envsubst '${INFRA_VPS_TAILNET_IP}' \
   < tailnet/promtail/promtail.yml.tmpl > tailnet/promtail/promtail.yml

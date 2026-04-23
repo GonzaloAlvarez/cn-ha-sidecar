@@ -98,20 +98,20 @@ services:
     image: traefik:v3.6.9
     network_mode: host
     command:
+      - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--certificatesresolvers.stepca.acme.caserver=https://${PKI_IP}:9000/acme/acme/directory"
+      - "--certificatesresolvers.stepca.acme.email=${ADMIN_EMAIL}"
+      - "--certificatesresolvers.stepca.acme.storage=/acme/acme.json"
+      - "--certificatesresolvers.stepca.acme.httpchallenge.entrypoint=web"
       - "--log.level=INFO"
+    environment:
+      - LEGO_CA_CERTIFICATES=/certs/root_ca.crt
     volumes:
       - ./traefik-lan/dynamic.yml:/etc/traefik/dynamic.yml:ro
-      - ./certs:/certs:ro
-    restart: unless-stopped
-
-  certwarden-client:
-    image: gregtwallace/certwarden-client:latest
-    volumes:
-      - ./certwarden-client.yaml:/opt/certwarden-client/config/certwarden-client.yaml:ro
-      - ./certs:/certs
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_lan_acme:/acme
+      - ./certs/root_ca.crt:/certs/root_ca.crt:ro
     restart: unless-stopped
 
   watchtower:
@@ -128,3 +128,4 @@ services:
 
 volumes:
   ts_state:
+  traefik_lan_acme:

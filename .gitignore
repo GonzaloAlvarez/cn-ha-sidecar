@@ -1,5 +1,4 @@
 .env
 certs/
 traefik-lan/dynamic.yml
-certwarden-client.yaml
 tailnet/promtail/promtail.yml

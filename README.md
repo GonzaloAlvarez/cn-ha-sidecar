@@ -4,7 +4,7 @@ Tailscale sidecar stack for Home Assistant (supervised mode). Connects HA
 to the CloudNet tailnet via Headscale and provides:
 
 - **Tailnet access**: `https://ha.<LAB_DOMAIN>` with Let's Encrypt TLS (via traefik-lab on VPS)
-- **LAN access**: `https://homeassistant.lan` with certwarden TLS
+- **LAN access**: `https://homeassistant.lan` with TLS from step-ca (ACME)
 - **Service discovery**: Consul registration for automatic traefik-lab routing
 - **Logging**: Promtail ships HA container logs to Loki on VPS
 - **Monitoring**: Watchtower monitors container image updates
@@ -21,8 +21,7 @@ to the CloudNet tailnet via Headscale and provides:
 ### 1. Create a Headscale pre-auth key (on VPS)
 
 ```bash
-docker exec cloudnet-headscale-1 headscale preauthkeys create \
-  --user 1 --tags tag:svc --reusable --expiration 1h
+docker exec cloudnet-headscale-1 headscale preauthkeys create --user 1 --tags tag:svc --reusable --expiration 1h
 ```
 
 Copy the key — you'll need it for `HA_AUTHKEY` below.
@@ -87,8 +86,9 @@ Then open `https://ha.<LAB_DOMAIN>` from any tailnet device. You should see
 the HA login page with a valid Let's Encrypt certificate. Verify the dashboard
 loads fully and updates in real-time (WebSocket).
 
-For LAN access, open `https://homeassistant.lan` (requires certwarden cert
-to be issued by cn-pki and DNS resolution for `homeassistant.lan` on your router).
+For LAN access, open `https://homeassistant.lan` (traefik-lan requests a cert
+from step-ca via ACME automatically; requires DNS resolution for `homeassistant.lan`
+on your router and `PKI_IP` set in `.env`).
 
 ## Optional: HA Metrics in Grafana
 
@@ -118,5 +118,5 @@ HA can export Prometheus metrics for scraping by the VPS Prometheus instance.
   that traefik-tailnet is running: `docker compose logs traefik-tailnet`
 - **Consul registration failing**: Check that the VPS tailnet IP is correct
   and ACLs allow `tag:svc -> tag:infra:8500`
-- **LAN cert not working**: Ensure cn-pki is running and has issued a cert
-  for `homeassistant.lan`. Check: `docker compose logs certwarden-client`
+- **LAN cert not working**: Ensure cn-pki step-ca is reachable at `https://${PKI_IP}:9000`
+  and `certs/root_ca.crt` exists. Check: `docker compose logs traefik-lan`
