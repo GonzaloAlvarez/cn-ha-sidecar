@@ -35,3 +35,13 @@ scrape_configs:
         target_label: unit
       - source_labels: ['__journal__hostname']
         target_label: hostname
+
+  - job_name: homeassistant-log
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: homeassistant-log
+          container: homeassistant
+          host: ha
+          __path__: /ha-config/home-assistant.log
+

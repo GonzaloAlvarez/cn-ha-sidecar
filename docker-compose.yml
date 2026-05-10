@@ -91,6 +91,7 @@ services:
       - /var/log/journal:/var/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro
       - /run/systemd/journal:/run/systemd/journal:ro
+      - /usr/share/hassio/homeassistant:/ha-config:ro
     depends_on:
       - ts-ha
     restart: unless-stopped
