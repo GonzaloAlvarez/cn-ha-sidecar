@@ -22,3 +22,16 @@ scrape_configs:
         target_label: container
       - replacement: ha
         target_label: host
+
+  - job_name: host-journal
+    journal:
+      max_age: 12h
+      path: /var/log/journal
+      labels:
+        job: host-journal
+        host: homeiot
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: unit
+      - source_labels: ['__journal__hostname']
+        target_label: hostname

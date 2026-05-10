@@ -88,6 +88,25 @@ services:
     volumes:
       - ./tailnet/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - /run/systemd/journal:/run/systemd/journal:ro
+    depends_on:
+      - ts-ha
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    network_mode: "service:ts-ha"
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
     depends_on:
       - ts-ha
     restart: unless-stopped
@@ -139,7 +158,7 @@ services:
           CUR=$$(docker inspect cn-ha-sidecar-ts-ha-1 --format "{{.State.StartedAt}}" 2>/dev/null || true);
           if [ -n "$$CUR" ] && [ -n "$$LAST" ] && [ "$$CUR" != "$$LAST" ]; then
             echo "[watchdog] ts-ha restarted (was $$LAST, now $$CUR), recreating sidecars";
-            docker compose -p cn-ha-sidecar up -d --force-recreate --no-deps consul-register traefik-tailnet promtail \
+            docker compose -p cn-ha-sidecar up -d --force-recreate --no-deps consul-register traefik-tailnet promtail node-exporter \
               && echo "[watchdog] sidecars recreated" \
               || echo "[watchdog] recreate failed";
           fi;
