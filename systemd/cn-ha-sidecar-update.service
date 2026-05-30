@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh cn-ha-sidecar container images (replacement for removed watchtower)
+Documentation=https://github.com/GonzaloAlvarez/cn-ha-sidecar
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gonzalo
+Group=gonzalo
+WorkingDirectory=/home/gonzalo/cn-ha-sidecar
+ExecStart=/home/gonzalo/cn-ha-sidecar/update.sh
+StandardOutput=journal
+StandardError=journal

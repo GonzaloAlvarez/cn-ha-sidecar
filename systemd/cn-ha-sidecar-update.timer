@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly cn-ha-sidecar image refresh (was watchtower's 03:00 schedule)
+Documentation=https://github.com/GonzaloAlvarez/cn-ha-sidecar
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=cn-ha-sidecar-update.service
+
+[Install]
+WantedBy=timers.target
