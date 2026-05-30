@@ -132,18 +132,6 @@ services:
       - ./certs/root_ca.crt:/certs/root_ca.crt:ro
     restart: unless-stopped
 
-  watchtower:
-    image: containrrr/watchtower:latest
-    command:
-      - "--cleanup"
-      - "--schedule=0 0 3 * * *"
-      - "--notification-url=smtp://${SMTP_USERNAME}:${SMTP_PASSWORD}@${SMTP_HOST}:${SMTP_PORT}/?from=${SMTP_FROM}&to=${ALERT_EMAIL}&starttls=yes"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DOCKER_API_VERSION=1.45
-    restart: unless-stopped
-
   ts-ha-watchdog:
     image: docker:cli
     volumes:
