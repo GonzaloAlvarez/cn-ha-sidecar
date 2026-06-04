@@ -132,29 +132,56 @@ services:
       - ./certs/root_ca.crt:/certs/root_ca.crt:ro
     restart: unless-stopped
 
+  # ── ts-ha watchdog: force-recreate dependents on netns drift ──
+  # Detects drift by comparing each dependent's HostConfig.NetworkMode
+  # ("container:<id>") against ts-ha's current container ID. Self-heals
+  # on its own first poll (so a coordinated stack restart, e.g. watchtower,
+  # cannot leave dependents pinned to an orphaned netns inode), silently
+  # no-ops in steady state. Also restarts dependents stuck in non-running
+  # status (e.g. Created-but-never-started after a midway compose failure).
   ts-ha-watchdog:
     image: docker:cli
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PWD}:${PWD}
     working_dir: ${PWD}
-    command: >
-      sh -c '
-        apk add --no-cache docker-cli-compose >/dev/null;
-        echo "[watchdog] ready, polling ts-ha every 10s";
-        LAST="";
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache docker-cli-compose >/dev/null
+        DEPS="consul-register traefik-tailnet promtail node-exporter"
+        echo "[watchdog] ready, polling dependents every 10s ($$DEPS)"
         while true; do
-          CUR=$$(docker inspect cn-ha-sidecar-ts-ha-1 --format "{{.State.StartedAt}}" 2>/dev/null || true);
-          if [ -n "$$CUR" ] && [ -n "$$LAST" ] && [ "$$CUR" != "$$LAST" ]; then
-            echo "[watchdog] ts-ha restarted (was $$LAST, now $$CUR), recreating sidecars";
-            docker compose -p cn-ha-sidecar up -d --force-recreate --no-deps consul-register traefik-tailnet promtail node-exporter \
-              && echo "[watchdog] sidecars recreated" \
-              || echo "[watchdog] recreate failed";
-          fi;
-          LAST="$$CUR";
-          sleep 10;
+          TS_ID=$$(docker inspect cn-ha-sidecar-ts-ha-1 --format "{{.Id}}" 2>/dev/null || true)
+          if [ -n "$$TS_ID" ]; then
+            NEED_RECREATE=""
+            NEED_START=""
+            for dep in $$DEPS; do
+              INFO=$$(docker inspect cn-ha-sidecar-$$dep-1 --format "{{.HostConfig.NetworkMode}} {{.State.Status}}" 2>/dev/null || true)
+              [ -n "$$INFO" ] || continue
+              DEP_NM=$$(echo "$$INFO" | awk "{print \$$1}")
+              DEP_STATUS=$$(echo "$$INFO" | awk "{print \$$2}")
+              DEP_TARGET=$${DEP_NM#container:}
+              if [ "$$DEP_TARGET" != "$$TS_ID" ]; then
+                NEED_RECREATE="$$NEED_RECREATE $$dep"
+              elif [ "$$DEP_STATUS" != "running" ]; then
+                NEED_START="$$NEED_START $$dep"
+              fi
+            done
+            if [ -n "$$NEED_RECREATE" ]; then
+              echo "[watchdog] netns drift on:$$NEED_RECREATE -- recreating"
+              docker compose -p cn-ha-sidecar up -d --force-recreate --no-deps $$NEED_RECREATE \
+                && echo "[watchdog] recreate OK" || echo "[watchdog] recreate FAILED"
+            fi
+            if [ -n "$$NEED_START" ]; then
+              echo "[watchdog] stopped on:$$NEED_START -- starting"
+              docker compose -p cn-ha-sidecar start $$NEED_START \
+                && echo "[watchdog] start OK" || echo "[watchdog] start FAILED"
+            fi
+          fi
+          sleep 10
         done
-      '
     restart: unless-stopped
 
 volumes:
