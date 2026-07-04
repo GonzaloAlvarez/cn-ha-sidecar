@@ -207,6 +207,29 @@ services:
         done
     restart: unless-stopped
 
+  # Auto-update ONLY the cn-ha-sidecar containers, named explicitly. Home
+  # Assistant Supervised (homeassistant / hassio_* / addon_*) shares this docker
+  # socket and is managed by the HA Supervisor — a watchtower that monitored all
+  # containers would grab + recreate those and fight the Supervisor. Passing an
+  # explicit container list scopes watchtower to just this stack. (ts-ha-watchdog
+  # is docker:cli and watchtower itself are intentionally omitted.)
+  watchtower:
+    image: containrrr/watchtower:latest
+    command:
+      - "--cleanup"
+      - "--schedule=0 0 4 * * *"
+      - "cn-ha-sidecar-ts-ha-1"
+      - "cn-ha-sidecar-traefik-tailnet-1"
+      - "cn-ha-sidecar-traefik-lan-1"
+      - "cn-ha-sidecar-consul-register-1"
+      - "cn-ha-sidecar-promtail-1"
+      - "cn-ha-sidecar-node-exporter-1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_API_VERSION=1.45
+    restart: unless-stopped
+
 volumes:
   ts_state:
   traefik_lan_acme:
