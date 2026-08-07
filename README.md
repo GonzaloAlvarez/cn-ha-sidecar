@@ -110,6 +110,24 @@ HA can export Prometheus metrics for scraping by the VPS Prometheus instance.
 4. Restart Prometheus: `docker compose restart prometheus` (on VPS)
 5. Query `homeassistant_entity_*` in Grafana Explore
 
+## Disk maintenance
+
+The 14 GB root filesystem fills up over time — mainly `/var/cache/apt`
+(apt's daily pre-download of upgradable packages that unattended-upgrades
+never installs) and the journal. `scripts/disk-maintenance.sh` cleans both
+plus dangling docker images; run once with `--install` to disable the apt
+pre-download and add a weekly cron (`/etc/cron.d/cn-ha-sidecar-disk-maintenance`,
+Sundays 04:15):
+
+```sh
+sudo ./scripts/disk-maintenance.sh --install
+```
+
+Each pass logs `maintenance pass done: / N% -> M%` to syslog (tag
+`disk-maintenance`), which promtail ships to Loki. The corresponding alerts
+are `HomeIoTDiskSpaceLow` (>80%) / `HomeIoTDiskSpaceCritical` (>95%) in
+`cn-root-docker/tailnet/prometheus/alerts.yml`.
+
 ## Troubleshooting
 
 - **`host.docker.internal` not resolving**: Replace with the literal Docker
