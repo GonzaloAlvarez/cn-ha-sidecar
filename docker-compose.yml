@@ -136,7 +136,7 @@ services:
     # Without this, the 24h step-ca leaf expires silently and every
     # *.homeiot.lan probe goes 5xx. Hit on 2026-06-23 ~00:46Z.
     extra_hosts:
-      - "pki.lan:10.0.0.192"
+      - "pki.lan:10.0.0.250"
     restart: unless-stopped
 
   # ── ts-ha watchdog: force-recreate dependents on netns drift ──
