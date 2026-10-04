@@ -39,26 +39,33 @@ cd cn-ha-sidecar
 The script will prompt for all required environment variables and generate
 config files from templates.
 
-### 3. Configure Home Assistant trusted proxies (on HA host)
+### 3. Configure Home Assistant trusted proxies (in the HA UI)
 
-Edit the HA configuration file (usually `/usr/share/hassio/homeassistant/configuration.yaml`):
+Both Traefiks forward to HA with `X-Forwarded-For`, so HA must trust them or it
+answers every proxied request with `400 Bad Request`. Since Home Assistant
+2026.9 the `http` integration is configured from the UI, not YAML: open
+**Settings -> System -> Network**, enable *Use X-Forwarded-For* and add the
+trusted proxies:
 
-```yaml
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 172.17.0.0/16    # Docker default bridge (traefik-tailnet -> HA)
-    - 172.18.0.0/16    # Docker compose network (fallback)
-    - 127.0.0.1/32     # traefik-lan (host network, localhost)
-```
+| Proxy | Source address seen by HA |
+|---|---|
+| `traefik-lan` (host network) | `127.0.0.1/32`, `::1/128` |
+| `traefik-tailnet` (Docker default bridge, via `host.docker.internal`) | `172.17.0.1/32` |
+| compose project network (fallback) | `172.18.0.0/24` |
 
-Verify your Docker bridge subnet:
+Verify the bridge addresses before trusting them:
 
 ```bash
-docker network inspect bridge | grep Subnet
+docker network inspect bridge | grep -E 'Subnet|Gateway'
+docker network inspect cn-ha-sidecar_default | grep Subnet
 ```
 
-Restart HA (Settings -> System -> Restart, or `ha core restart`).
+HA stores the result in `.storage/http`. A legacy `http:` block in
+`configuration.yaml` is imported once on upgrade and then raises the repair
+*"The HTTP YAML configuration is deprecated"* (removed in 2027.2); clear it by
+deleting the block and restarting core (`ha core check && ha core restart`).
+The live host was converted this way on 2026-10-04 and `configuration.yaml`
+no longer carries an `http:` block.
 
 ### 4. Start the sidecar stack (on HA host)
 
