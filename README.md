@@ -7,7 +7,7 @@ to the CloudNet tailnet via Headscale and provides:
 - **LAN access**: `https://homeassistant.lan` with TLS from step-ca (ACME)
 - **Service discovery**: Consul registration for automatic traefik-lab routing
 - **Logging**: Promtail ships HA container logs to Loki on VPS
-- **Monitoring**: Watchtower monitors container image updates
+- **Updates**: nightly `systemd/cn-ha-sidecar-update.timer` runs `update.sh` (pull + recreate + prune). No Watchtower on this host: `containrrr/watchtower` is on the HA Supervisor's unhealthy-image list, and its presence blocks `ha core update` and add-on updates
 
 ## Prerequisites
 
